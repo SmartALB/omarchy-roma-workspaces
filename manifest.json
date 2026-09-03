@@ -1,0 +1,55 @@
+{
+  "schemaVersion": 1,
+  "id": "smartalb.roma-workspaces",
+  "name": "Roma Workspaces",
+  "version": "1.0.0",
+  "author": "SmartALB",
+  "license": "MIT",
+  "description": "Workspace indicators in Roman numerals, with a right-click menu for how many to show.",
+  "kinds": [
+    "bar-widget"
+  ],
+  "entryPoints": {
+    "barWidget": "Workspaces.qml"
+  },
+  "barWidget": {
+    "displayName": "Roma Workspaces",
+    "description": "Workspace indicators in Roman numerals",
+    "category": "Compositor",
+    "aliases": [
+      "roman",
+      "latin",
+      "workspaces"
+    ],
+    "allowMultiple": false,
+    "defaultSection": "left",
+    "defaults": {
+      "workspaceCount": 5,
+      "revealOccupied": true,
+      "dimEmpty": true
+    },
+    "schema": [
+      {
+        "key": "workspaceCount",
+        "type": "number",
+        "label": "Workspaces shown",
+        "defaultValue": 5,
+        "description": "How many workspaces are always in the bar, from I upwards. 1 to 10."
+      },
+      {
+        "key": "revealOccupied",
+        "type": "boolean",
+        "label": "Reveal the ones beyond",
+        "defaultValue": true,
+        "description": "Also show a workspace past that count while it exists, so the one you are on is never missing from the bar."
+      },
+      {
+        "key": "dimEmpty",
+        "type": "boolean",
+        "label": "Dim the empty ones",
+        "defaultValue": true,
+        "description": "Fade workspaces holding no windows."
+      }
+    ]
+  }
+}
