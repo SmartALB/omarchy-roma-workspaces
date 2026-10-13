@@ -23,7 +23,7 @@ the same to the clock. Neither needs the other.
 
 | Setting | Does | Default |
 |---|---|---|
-| Workspaces shown | How many are always in the bar, from `I` upwards (1–10) | 5 |
+| Workspaces shown | How many are always in the bar, from `I` upwards (1–20) | 5 |
 | Reveal the ones beyond | Keeps a workspace past that count visible while it exists | on |
 | Dim the empty ones | Fades workspaces holding no windows | on |
 
@@ -85,15 +85,27 @@ follow whatever theme is active. **No colour and no font is hardcoded** —
 what you see is your theme, not this author's.
 
 Numerals are computed in classical subtractive form (`IV`, not `IIII`)
-rather than looked up in a table, so nothing breaks at the end of a list.
+rather than looked up in a table. The widget can show numeric workspaces from
+`I` through `XX`; the default remains five.
 
 Two things the built-in does not do: the numerals, and a tooltip listing the
 window classes on each workspace, deduplicated and cut off after three.
 
+## Tests
+
+```bash
+test/run-tests.sh
+```
+
+The suite checks the version and workspace-range contracts, then executes the
+same Roman numeral and setting-coercion functions the widget imports. It uses
+Node.js for those behavioural checks; Node.js is needed only for development,
+not by the installed widget.
+
 ## Requires
 
-Hyprland, which Omarchy runs anyway. No scripts, no dependencies, no network
-access.
+At runtime, only Hyprland, which Omarchy runs anyway. No helper processes,
+additional packages, or network access.
 
 ## License
 

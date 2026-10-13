@@ -3,6 +3,7 @@ import QtQuick.Layouts
 import Quickshell.Hyprland
 import qs.Commons
 import qs.Ui
+import "Logic.js" as Logic
 
 // Workspace indicators in Roman numerals, and the menu that decides how many
 // of them there are. Grown from a clone of omarchy.workspaces, so the parts
@@ -20,7 +21,7 @@ Panel {
 
   // Second copy of what manifest.json says: QML cannot read the manifest,
   // because Omarchy's PluginRegistry is an instance rather than a singleton.
-  readonly property string pluginVersion: "1.0.0"
+  readonly property string pluginVersion: "1.1.0"
 
   readonly property string fontFam: bar ? bar.fontFamily : Style.font.family
   readonly property color fg: barForeground
@@ -33,24 +34,15 @@ Panel {
   // and a non-empty string is true -- switching an option off would switch
   // it on. Both readers below coerce rather than trust.
   function flag(key, fallback) {
-    var value = setting(key, fallback)
-    if (typeof value === "string") {
-      var s = value.trim().toLowerCase()
-      if (s === "true" || s === "1" || s === "yes" || s === "on") return true
-      if (s === "false" || s === "0" || s === "no" || s === "off" || s === "") return false
-      return fallback === true
-    }
-    return value === true
+    return Logic.flag(setting(key, fallback), fallback)
   }
 
   function number(key, fallback, low, high) {
-    var value = Number(setting(key, fallback))
-    if (!isFinite(value)) return fallback
-    return Math.max(low, Math.min(high, Math.round(value)))
+    return Logic.boundedInteger(setting(key, fallback), fallback, low, high)
   }
 
   readonly property int minCount: 1
-  readonly property int maxCount: 10
+  readonly property int maxCount: 20
 
   readonly property int workspaceCount: number("workspaceCount", 5, minCount, maxCount)
   readonly property bool revealOccupied: flag("revealOccupied", true)
@@ -92,25 +84,6 @@ Panel {
       if (values[i].id === id) return values[i]
     }
     return null
-  }
-
-  // Classical subtractive form, computed rather than tabulated -- a lookup
-  // table would stop at whatever its last entry happened to be.
-  function roman(value) {
-    if (!isFinite(value) || value < 1) return String(value)
-
-    var amounts = [1000, 900, 500, 400, 100, 90, 50, 40, 10, 9, 5, 4, 1]
-    var symbols = ["M", "CM", "D", "CD", "C", "XC", "L", "XL", "X", "IX", "V", "IV", "I"]
-    var left = Math.round(value)
-    var out = ""
-
-    for (var i = 0; i < amounts.length; i++) {
-      while (left >= amounts[i]) {
-        out += symbols[i]
-        left -= amounts[i]
-      }
-    }
-    return out
   }
 
   function workspaceTooltip(workspace) {
@@ -169,7 +142,7 @@ Panel {
         // widget sets none either, so both follow whatever theme is active
         // rather than one particular author's.
         bar: root.bar
-        text: root.roman(modelData)
+        text: Logic.roman(modelData)
         tooltipText: root.workspaceTooltip(workspace)
         active: focused
         opacity: (occupied || focused || !root.dimEmpty) ? 1 : 0.5

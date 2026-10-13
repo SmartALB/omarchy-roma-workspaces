@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "id": "smartalb.roma-workspaces",
   "name": "Roma Workspaces",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "author": "SmartALB",
   "license": "MIT",
   "description": "Workspace indicators in Roman numerals, with a right-click menu for how many to show.",
@@ -31,10 +31,13 @@
     "schema": [
       {
         "key": "workspaceCount",
-        "type": "number",
+        "type": "integer",
         "label": "Workspaces shown",
         "defaultValue": 5,
-        "description": "How many workspaces are always in the bar, from I upwards. 1 to 10."
+        "min": 1,
+        "max": 20,
+        "step": 1,
+        "description": "How many workspaces are always in the bar, from I upwards. 1 to 20."
       },
       {
         "key": "revealOccupied",
