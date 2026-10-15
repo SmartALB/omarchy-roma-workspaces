@@ -53,6 +53,23 @@ assert_workspace_contract() {
   fi
 }
 
+assert_input_lifecycle() {
+  local loader_block
+  loader_block="$($BIN_SED -n '/id: panelContent/,/sourceComponent: Component {/p' "$QML")"
+
+  if [ "$($BIN_GREP -c 'NumberField {' "$QML")" = "1" ] \
+      && printf '%s\n' "$loader_block" | "$BIN_GREP" -q 'active: root.opened' \
+      && "$BIN_SED" -n '/sourceComponent: Component {/,/^      }/p' "$QML" \
+        | "$BIN_GREP" -q 'NumberField {' \
+      && "$BIN_GREP" -q 'field.editable: false' "$QML" \
+      && "$BIN_GREP" -q 'panelContent.item ? panelContent.item.implicitHeight : 0' "$QML"; then
+    ok "NumberField is non-editable and exists only while the settings panel is open"
+  else
+    bad "settings input lifecycle" \
+      "NumberField must be non-editable and live in a Loader active only while root.opened"
+  fi
+}
+
 assert_logic() {
   if "$BIN_NODE" - "$LOGIC" <<'NODE'
 const fs = require("fs")
@@ -103,6 +120,7 @@ NODE
 printf 'Roma Workspaces — tests\n'
 assert_versions_match
 assert_workspace_contract
+assert_input_lifecycle
 assert_logic
 
 printf '\n'

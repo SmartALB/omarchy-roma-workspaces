@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "id": "smartalb.roma-workspaces",
   "name": "Roma Workspaces",
-  "version": "1.1.0",
+  "version": "1.1.1",
   "author": "SmartALB",
   "license": "MIT",
   "description": "Workspace indicators in Roman numerals, with a right-click menu for how many to show.",

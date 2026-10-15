@@ -21,7 +21,7 @@ Panel {
 
   // Second copy of what manifest.json says: QML cannot read the manifest,
   // because Omarchy's PluginRegistry is an instance rather than a singleton.
-  readonly property string pluginVersion: "1.1.0"
+  readonly property string pluginVersion: "1.1.1"
 
   readonly property string fontFam: bar ? bar.fontFamily : Style.font.family
   readonly property color fg: barForeground
@@ -165,51 +165,64 @@ Panel {
     bar: root.bar
     open: root.opened
     contentWidth: panel.fittedContentWidth(Style.space(300))
-    contentHeight: panel.fittedContentHeight(panelColumn.implicitHeight)
+    contentHeight: panel.fittedContentHeight(panelContent.item ? panelContent.item.implicitHeight : 0)
 
-    Column {
-      id: panelColumn
+    // NumberField inherits an editable TextInput. Qt 6.12 may inspect the
+    // clipboard whenever it changes, even while a merely hidden field is not
+    // being used. Destroy the complete settings subtree when this panel is
+    // closed instead of leaving its input controls resident in the shared
+    // shell process.
+    Loader {
+      id: panelContent
+      active: root.opened
       width: parent.width
-      spacing: Style.space(4)
+      sourceComponent: Component {
+        Column {
+          id: panelColumn
+          spacing: Style.space(4)
 
-      PanelSectionHeader {
-        text: "Roma Workspaces"
-        foreground: root.fg
-        fontFamily: root.fontFam
-      }
+          PanelSectionHeader {
+            text: "Roma Workspaces"
+            foreground: root.fg
+            fontFamily: root.fontFam
+          }
 
-      NumberField {
-        label: "Workspaces shown"
-        value: root.workspaceCount
-        from: root.minCount
-        to: root.maxCount
-        stepSize: 1
-        foreground: root.fg
-        accent: Color.accent
-        fontFamily: root.fontFam
-        onModified: function(v) { root.setValue("workspaceCount", v) }
-      }
+          NumberField {
+            width: panelColumn.width
+            label: "Workspaces shown"
+            field.editable: false
+            value: root.workspaceCount
+            from: root.minCount
+            to: root.maxCount
+            stepSize: 1
+            foreground: root.fg
+            accent: Color.accent
+            fontFamily: root.fontFam
+            onModified: function(v) { root.setValue("workspaceCount", v) }
+          }
 
-      Toggle {
-        width: panelColumn.width
-        label: "Reveal the ones beyond"
-        description: "Keep showing a workspace past that count while it exists"
-        foreground: root.fg
-        accent: Color.accent
-        fontFamily: root.fontFam
-        checked: root.revealOccupied
-        onClicked: root.setValue("revealOccupied", !root.revealOccupied)
-      }
+          Toggle {
+            width: panelColumn.width
+            label: "Reveal the ones beyond"
+            description: "Keep showing a workspace past that count while it exists"
+            foreground: root.fg
+            accent: Color.accent
+            fontFamily: root.fontFam
+            checked: root.revealOccupied
+            onClicked: root.setValue("revealOccupied", !root.revealOccupied)
+          }
 
-      Toggle {
-        width: panelColumn.width
-        label: "Dim the empty ones"
-        description: "Fade workspaces holding no windows"
-        foreground: root.fg
-        accent: Color.accent
-        fontFamily: root.fontFam
-        checked: root.dimEmpty
-        onClicked: root.setValue("dimEmpty", !root.dimEmpty)
+          Toggle {
+            width: panelColumn.width
+            label: "Dim the empty ones"
+            description: "Fade workspaces holding no windows"
+            foreground: root.fg
+            accent: Color.accent
+            fontFamily: root.fontFam
+            checked: root.dimEmpty
+            onClicked: root.setValue("dimEmpty", !root.dimEmpty)
+          }
+        }
       }
     }
   }

@@ -100,7 +100,10 @@ test/run-tests.sh
 The suite checks the version and workspace-range contracts, then executes the
 same Roman numeral and setting-coercion functions the widget imports. It uses
 Node.js for those behavioural checks; Node.js is needed only for development,
-not by the installed widget.
+not by the installed widget. It also verifies that the number control is
+non-editable and instantiated only while the settings panel is open, so it
+has no paste path and a closed panel cannot react to clipboard changes in the
+shared shell process.
 
 ## Requires
 
