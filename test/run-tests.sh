@@ -121,10 +121,10 @@ assert_per_monitor() {
   if "$BIN_GREP" -q 'monitor.activeWorkspace' "$QML" \
       && "$BIN_GREP" -q 'monitor-workspaces' "$QML" \
       && "$BIN_GREP" -q 'focusExpression' "$QML" \
-      && "$BIN_GREP" -q 'font.bold: parent.shown' "$QML" \
+      && "$BIN_GREP" -q 'font.bold: parent.occupied' "$QML" \
       && ! "$BIN_GREP" -q 'focusedWorkspace' "$QML" \
       && "$BIN_GREP" -q 'o.workspaces.focus' "$LOGIC"; then
-    ok "each bar bolds the workspace its own monitor is showing"
+    ok "each bar bolds workspaces that hold a window"
   else
     bad "per-monitor workspace marking" \
       "mark monitor.activeWorkspace in bold, and do not follow the global focused workspace"
@@ -214,6 +214,22 @@ if (logic.focusExpression(4, 0, laptop, 10) !== 'o.workspaces.focus(4, "eDP-2")'
   fail(`single focus ${logic.focusExpression(4, 0, laptop, 10)}`)
 if (logic.focusExpression(12, 0, laptop, 10) !== 'hl.dsp.focus({ workspace = "12" })')
   fail(`guest focus ${logic.focusExpression(12, 0, laptop, 10)}`)
+
+const counts = logic.windowCounts(
+  [
+    { id: 1, toplevelCount: 0, reportedWindows: 1 },
+    { id: 11, toplevelCount: 2, reportedWindows: 0 },
+    { id: 15, toplevelCount: 0, reportedWindows: 1 },
+    { id: -98, toplevelCount: 1, reportedWindows: 1 }
+  ],
+  [{ workspaceId: 12 }, { workspaceId: 13 }, { workspaceId: 13 }, { workspaceId: -98 }]
+)
+if (!logic.hasWindow(counts, 1) || !logic.hasWindow(counts, 11) || !logic.hasWindow(counts, 12)
+    || !logic.hasWindow(counts, 13) || !logic.hasWindow(counts, 15))
+  fail(`occupied set ${JSON.stringify(counts)}`)
+if (logic.hasWindow(counts, 2) || logic.hasWindow(counts, 14) || logic.hasWindow(counts, -98))
+  fail(`empty workspace looked occupied ${JSON.stringify(counts)}`)
+if (counts["13"] !== 2) fail(`duplicate windows collapsed ${JSON.stringify(counts)}`)
 NODE
   then
     ok "one monitor and several monitors list and focus their own workspaces"

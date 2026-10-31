@@ -98,6 +98,28 @@ Panel {
 
   readonly property int block: Logic.monitorBlock(root.blocks, root.monitorName, root.activeWorkspaceId, Logic.slotsPerMonitor())
 
+  // Workspace id -> how many windows it holds. Read straight off the live
+  // models so opening or closing a window updates every bar.
+  readonly property var windowCounts: {
+    var toplevels = Hyprland.toplevels.values
+    var workspaces = Hyprland.workspaces.values
+    var topRecords = []
+    var workspaceRecords = []
+    var i
+    for (i = 0; i < toplevels.length; i++) {
+      var top = toplevels[i]
+      topRecords.push({ workspaceId: top.workspace ? top.workspace.id : -1 })
+    }
+    for (i = 0; i < workspaces.length; i++) {
+      var workspace = workspaces[i]
+      var listed = workspace.toplevels && workspace.toplevels.values ? workspace.toplevels.values.length : 0
+      var reported = workspace.lastIpcObject && workspace.lastIpcObject.windows !== undefined
+        ? Number(workspace.lastIpcObject.windows) : 0
+      workspaceRecords.push({ id: workspace.id, toplevelCount: listed, reportedWindows: reported })
+    }
+    return Logic.windowCounts(workspaceRecords, topRecords)
+  }
+
   function workspaceRecords(values) {
     var records = []
     if (!values) return records
@@ -175,11 +197,18 @@ Panel {
     function onRawEvent(event) {
       var name = event ? String(event.name) : ""
       var switched = name === "workspacev2" && root.monitor !== null && root.monitor.focused
-      if (switched || name === "moveworkspacev2" || name === "changeworkspaceid") {
+      var windowsChanged = name === "openwindow" || name === "closewindow" || name === "movewindow" || name === "movewindowv2"
+      if (switched || windowsChanged || name === "moveworkspacev2" || name === "changeworkspaceid") {
         Hyprland.refreshMonitors()
         Hyprland.refreshWorkspaces()
+        Hyprland.refreshToplevels()
       }
     }
+  }
+
+  Component.onCompleted: {
+    Hyprland.refreshWorkspaces()
+    Hyprland.refreshToplevels()
   }
 
   readonly property real trailingGap: root.vertical ? 0 : Style.spaceReal(1.5)
@@ -209,16 +238,16 @@ Panel {
         readonly property bool guest: Logic.blockOf(modelData, slots) !== root.block
         readonly property bool firstGuest: guest && index > 0 && Logic.blockOf(root.workspaceIds[index - 1], slots) === root.block
         readonly property var workspace: root.workspaceById(modelData)
-        readonly property bool occupied: workspace !== null && workspace.toplevels.values.length > 0
+        readonly property bool occupied: Logic.hasWindow(root.windowCounts, modelData)
         readonly property bool shown: root.activeWorkspaceId === modelData
 
         // A gap sets a visiting workspace apart from this monitor's own.
         Layout.leftMargin: firstGuest && !root.vertical ? Style.space(6) : 0
         Layout.topMargin: firstGuest && root.vertical ? Style.space(6) : 0
 
-        // Family, size, and colour come from the bar. The one this monitor is
-        // showing is bold, and takes the button's active colour, so each bar
-        // marks its own screen rather than the screen that has the keyboard.
+        // Family, size, and colour come from the bar. A workspace that holds a
+        // window is bold. The one this monitor is showing takes the button's
+        // active colour, on this screen alone.
         bar: root.bar
         text: Logic.roman(slot)
         labelVisible: false
@@ -247,7 +276,7 @@ Panel {
           color: parent.active && parent.useActiveColor ? parent.activeColor : parent.foreground
           font.family: parent.fontFamily
           font.pixelSize: parent.fontSize
-          font.bold: parent.shown
+          font.bold: parent.occupied
           renderType: Text.NativeRendering
           horizontalAlignment: Text.AlignHCenter
           verticalAlignment: Text.AlignVCenter

@@ -6,17 +6,19 @@ Workspace indicators for the Omarchy bar, in Roman numerals:
 I  II  III  IV  V
 ```
 
-Each bar belongs to the monitor it is drawn on. The workspace that monitor
-is showing is bold and takes the theme's accent, empty ones are dimmed, and
-hovering a numeral lists the windows on that workspace. Left click focuses
-it on that monitor. Right click opens a menu for how many there should be.
+Each bar belongs to the monitor it is drawn on. A workspace that holds a
+window is bold, an empty one is dimmed, and the one that monitor is showing
+takes the theme's accent. Hovering a numeral lists the windows on that
+workspace. Left click focuses it on that monitor. Right click opens a menu
+for how many there should be.
 
 Omarchy gives every monitor workspaces of its own. Hyprland still numbers
 them in one sequence, ten per monitor, so the first screen owns 1–10 and
 the next owns 11–20. This bar does not show that sequence. Each screen shows
-its own, from `I` upward, and the bold numeral is the workspace *that screen*
-is showing, including when the keyboard is on the other one. With one monitor
-that is simply `I` upward. A workspace left behind by a monitor that was
+its own, from `I` upward. Bold marks a workspace with a window on it. The
+accent marks the workspace *that screen* is showing, including when the
+keyboard is on the other one. With one monitor that is simply `I` upward.
+A workspace left behind by a monitor that was
 unplugged is listed after the screen's own, for as long as it stays.
 
 Companion to [Roma](https://github.com/SmartALB/omarchy-roma), which does
@@ -92,7 +94,8 @@ turns into a single column when the bar is vertical, each bar shows the
 monitor it is drawn on, and focus goes through the same `o.workspaces.focus`
 dispatch, aimed at that monitor. The buttons are the bar's own, so they
 follow whatever theme is active. The family, the size, and the colours are
-the theme's; the workspace that monitor is showing is bold.
+the theme's. A workspace with a window on it is bold, and the one that
+monitor is showing takes the accent.
 
 Numerals are computed in classical subtractive form (`IV`, not `IIII`)
 rather than looked up in a table. Each monitor is numbered from `I` through

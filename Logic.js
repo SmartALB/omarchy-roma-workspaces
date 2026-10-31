@@ -118,6 +118,43 @@ function listedWorkspaces(spec) {
 // A slot of this monitor's own block is focused by slot, on that monitor, so
 // a click cannot pull another screen's workspace across. A visitor has no
 // slot here, and is focused by its real id.
+// How many windows each workspace id holds. A toplevel that names its
+// workspace is counted directly. The workspace's own list and the window
+// count Hyprland last reported fill in anything that list missed. Keys are
+// strings because a QML object map does not keep numeric keys.
+function windowCounts(workspaces, toplevels) {
+  var counts = {}
+
+  function note(id, amount) {
+    var numeric = Number(id)
+    var windows = Number(amount)
+    if (!isFinite(numeric) || numeric <= 0 || !isFinite(windows) || windows <= 0) return
+    var key = String(numeric)
+    if (windows > (counts[key] || 0)) counts[key] = windows
+  }
+
+  var seen = {}
+  var i
+  for (i = 0; i < (toplevels || []).length; i++) {
+    var workspaceId = Number(toplevels[i].workspaceId)
+    if (workspaceId > 0) seen[workspaceId] = (seen[workspaceId] || 0) + 1
+  }
+  for (var key in seen) note(key, seen[key])
+
+  for (i = 0; i < (workspaces || []).length; i++) {
+    var workspace = workspaces[i]
+    var listed = Number(workspace.toplevelCount) || 0
+    var reported = Number(workspace.reportedWindows) || 0
+    note(workspace.id, Math.max(listed, reported))
+  }
+
+  return counts
+}
+
+function hasWindow(counts, id) {
+  return Number(counts && counts[String(id)] || 0) > 0
+}
+
 function focusExpression(id, block, monitorName, slots) {
   slots = slots || slotsPerMonitor()
   id = Math.round(Number(id))
