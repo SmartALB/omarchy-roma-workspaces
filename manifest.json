@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "id": "smartalb.roma-workspaces",
   "name": "Roma Workspaces",
-  "version": "1.1.1",
+  "version": "1.2.0",
   "author": "SmartALB",
   "license": "MIT",
   "description": "Workspace indicators in Roman numerals, with a right-click menu for how many to show.",
@@ -35,9 +35,9 @@
         "label": "Workspaces shown",
         "defaultValue": 5,
         "min": 1,
-        "max": 20,
+        "max": 10,
         "step": 1,
-        "description": "How many workspaces are always in the bar, from I upwards. 1 to 20."
+        "description": "How many of this monitor's workspaces are always in the bar, from I upwards. 1 to 10."
       },
       {
         "key": "revealOccupied",

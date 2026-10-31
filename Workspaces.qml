@@ -1,18 +1,25 @@
 import QtQuick
 import QtQuick.Layouts
+import Quickshell
 import Quickshell.Hyprland
+import Quickshell.Io
 import qs.Commons
 import qs.Ui
 import "Logic.js" as Logic
 
 // Workspace indicators in Roman numerals, and the menu that decides how many
-// of them there are. Grown from a clone of omarchy.workspaces, so the parts
-// that are not about numerals -- the grid that turns vertical with the bar,
-// the focus dispatch, the button styling -- behave exactly like the built-in
-// widget they came from.
+// of them there are. Grown from a clone of omarchy.workspaces.
 //
-// Left click focuses a workspace, because that is what a click on a
-// workspace means. The menu is on right click; it cannot have the left one.
+// Every monitor has workspaces of its own. Hyprland numbers them in a block
+// of ten per monitor -- 1-10, 11-20, and so on -- and each bar shows the
+// block of the monitor it is drawn on, labeled from I. The accent marks the
+// workspace that monitor is showing, whether or not the keyboard is there.
+// One monitor and several take the same path: resolve the screen this bar is
+// on, and until that screen is known follow the focused monitor, which is
+// the only monitor when there is just one.
+//
+// Left click focuses that monitor's workspace. The menu is on right click;
+// it cannot have the left one.
 Panel {
   id: root
   moduleName: "smartalb.roma-workspaces"
@@ -21,7 +28,7 @@ Panel {
 
   // Second copy of what manifest.json says: QML cannot read the manifest,
   // because Omarchy's PluginRegistry is an instance rather than a singleton.
-  readonly property string pluginVersion: "1.1.1"
+  readonly property string pluginVersion: "1.2.0"
 
   readonly property string fontFam: bar ? bar.fontFamily : Style.font.family
   readonly property color fg: barForeground
@@ -42,7 +49,7 @@ Panel {
   }
 
   readonly property int minCount: 1
-  readonly property int maxCount: 20
+  readonly property int maxCount: 10
 
   readonly property int workspaceCount: number("workspaceCount", 5, minCount, maxCount)
   readonly property bool revealOccupied: flag("revealOccupied", true)
@@ -57,24 +64,69 @@ Panel {
       root.bar.shell.updateEntryInline(root.moduleName, entry)
   }
 
-  // ---- Which workspaces to draw.
+  // ---- Which monitor this bar belongs to.
   //
-  // The configured count is a floor, not a ceiling: a workspace past it stays
-  // visible while it exists, so the one you are actually on is never missing
-  // from the bar. Switching that off makes the count literal.
-  function workspaceIds() {
-    var ids = []
-    for (var n = 1; n <= root.workspaceCount; n++) ids.push(n)
+  // The bar runs one surface per screen. The workspace to mark is the one
+  // that screen is showing. The globally focused workspace is the same on
+  // every bar, so it is the wrong one as soon as a second monitor is in use.
+  readonly property var monitor: {
+    var window = root.QsWindow.window
+    var screen = window ? window.screen : null
+    return screen ? Hyprland.monitorFor(screen) : Hyprland.focusedMonitor
+  }
+  readonly property string monitorName: root.monitor ? root.monitor.name : ""
+  readonly property int activeWorkspaceId: {
+    var workspace = root.monitor && root.monitor.activeWorkspace ? root.monitor.activeWorkspace : null
+    return workspace ? workspace.id : -1
+  }
 
-    if (root.revealOccupied) {
-      var values = Hyprland.workspaces.values
-      for (var i = 0; i < values.length; i++) {
-        var id = values[i].id
-        if (id > root.workspaceCount && id <= root.maxCount && ids.indexOf(id) === -1) ids.push(id)
-      }
-      ids.sort(function(left, right) { return left - right })
+  // Connector -> block, from the file Hyprland keeps the assignment in.
+  property var blocks: ({})
+
+  function applyBlocks(text) {
+    root.blocks = Logic.parseMonitorBlocks(text)
+  }
+
+  FileView {
+    path: (Quickshell.env("XDG_STATE_HOME") || Quickshell.env("HOME") + "/.local/state") + "/omarchy/monitor-workspaces"
+    watchChanges: true
+    printErrors: false
+    onFileChanged: reload()
+    onLoaded: root.applyBlocks(text())
+    onLoadFailed: root.applyBlocks("")
+  }
+
+  readonly property int block: Logic.monitorBlock(root.blocks, root.monitorName, root.activeWorkspaceId, Logic.slotsPerMonitor())
+
+  function workspaceRecords(values) {
+    var records = []
+    if (!values) return records
+    for (var i = 0; i < values.length; i++) {
+      var workspace = values[i]
+      records.push({
+        id: workspace.id,
+        monitorName: workspace.monitor ? String(workspace.monitor.name) : ""
+      })
     }
+    return records
+  }
 
+  // The configured count is a floor, not a ceiling, inside this monitor's
+  // own ten: a later slot stays visible while it exists, so the one this
+  // screen is on is never missing. Switching that off makes the count literal.
+  readonly property var workspaceIds: {
+    var values = Hyprland.workspaces.values
+    var entries = Logic.listedWorkspaces({
+      workspaceCount: root.workspaceCount,
+      maxCount: root.maxCount,
+      slots: Logic.slotsPerMonitor(),
+      block: root.block,
+      reveal: root.revealOccupied,
+      monitorName: root.monitorName,
+      workspaces: root.workspaceRecords(values)
+    })
+    var ids = []
+    for (var i = 0; i < entries.length; i++) ids.push(entries[i].id)
     return ids
   }
 
@@ -110,7 +162,24 @@ Panel {
 
   function focusWorkspace(id) {
     if (!root.bar) return
-    root.bar.run("hyprctl dispatch " + Util.shellQuote("hl.dsp.focus({ workspace = \"" + id + "\" })"))
+    var expression = Logic.focusExpression(id, root.block, root.monitorName, Logic.slotsPerMonitor())
+    root.bar.run("hyprctl dispatch " + Util.shellQuote(expression))
+  }
+
+  // Quickshell credits every workspace switch to the focused monitor, because
+  // the event does not say which one switched, and it misses the workspace a
+  // monitor falls back to when its own is moved away. Ask Hyprland for the
+  // truth so the accent on each bar stays on the workspace that screen shows.
+  Connections {
+    target: Hyprland
+    function onRawEvent(event) {
+      var name = event ? String(event.name) : ""
+      var switched = name === "workspacev2" && root.monitor !== null && root.monitor.focused
+      if (switched || name === "moveworkspacev2" || name === "changeworkspaceid") {
+        Hyprland.refreshMonitors()
+        Hyprland.refreshWorkspaces()
+      }
+    }
   }
 
   readonly property real trailingGap: root.vertical ? 0 : Style.spaceReal(1.5)
@@ -124,35 +193,71 @@ Panel {
     id: grid
     anchors.fill: parent
     anchors.rightMargin: root.trailingGap
-    columns: root.vertical ? 1 : root.workspaceIds().length
+    columns: root.vertical ? 1 : root.workspaceIds.length
     columnSpacing: root.vertical ? 0 : Style.space(0.75)
     rowSpacing: root.vertical ? Style.space(2) : 0
 
     Repeater {
-      model: root.workspaceIds()
+      model: root.workspaceIds
 
       WidgetButton {
         required property int modelData
+        required property int index
 
+        readonly property int slots: Logic.slotsPerMonitor()
+        readonly property int slot: Logic.slotOf(modelData, slots)
+        readonly property bool guest: Logic.blockOf(modelData, slots) !== root.block
+        readonly property bool firstGuest: guest && index > 0 && Logic.blockOf(root.workspaceIds[index - 1], slots) === root.block
         readonly property var workspace: root.workspaceById(modelData)
         readonly property bool occupied: workspace !== null && workspace.toplevels.values.length > 0
-        readonly property bool focused: Hyprland.focusedWorkspace !== null && Hyprland.focusedWorkspace.id === modelData
+        readonly property bool shown: root.activeWorkspaceId === modelData
 
-        // No colour or font is set here on purpose. The built-in workspaces
-        // widget sets none either, so both follow whatever theme is active
-        // rather than one particular author's.
+        // A gap sets a visiting workspace apart from this monitor's own.
+        Layout.leftMargin: firstGuest && !root.vertical ? Style.space(6) : 0
+        Layout.topMargin: firstGuest && root.vertical ? Style.space(6) : 0
+
+        // Family, size, and colour come from the bar. The one this monitor is
+        // showing is bold, and takes the button's active colour, so each bar
+        // marks its own screen rather than the screen that has the keyboard.
         bar: root.bar
-        text: Logic.roman(modelData)
+        text: Logic.roman(slot)
+        labelVisible: false
         tooltipText: root.workspaceTooltip(workspace)
-        active: focused
-        opacity: (occupied || focused || !root.dimEmpty) ? 1 : 0.5
+        active: shown
+        opacity: (occupied || shown || !root.dimEmpty) ? 1 : 0.5
         horizontalMargin: 6
         verticalPadding: 6
-        fixedWidth: root.vertical ? root.barSize : -1
+        fixedWidth: root.vertical ? root.barSize : Math.ceil(boldMetrics.boundingRect(text).width + scaledHorizontalMargin * 2)
         fixedHeight: root.barSize
         onPressed: function(b) {
           if (b === Qt.RightButton) root.toggle()
           else root.focusWorkspace(modelData)
+        }
+
+        // The button's own label cannot be made bold. This one is measured
+        // bold so the slot is wide enough either way, and the weight follows
+        // `shown`. Centering matches WidgetButton: the line box keeps room
+        // for descenders, so the figure height is what gets centered.
+        Text {
+          textFormat: Text.PlainText
+          anchors.centerIn: parent
+          anchors.verticalCenterOffset: root.vertical ? 0
+            : (boldMetrics.descent - boldMetrics.ascent + boldMetrics.tightBoundingRect("0").height) / 2
+          text: parent.text
+          color: parent.active && parent.useActiveColor ? parent.activeColor : parent.foreground
+          font.family: parent.fontFamily
+          font.pixelSize: parent.fontSize
+          font.bold: parent.shown
+          renderType: Text.NativeRendering
+          horizontalAlignment: Text.AlignHCenter
+          verticalAlignment: Text.AlignVCenter
+        }
+
+        FontMetrics {
+          id: boldMetrics
+          font.family: parent.fontFamily
+          font.pixelSize: parent.fontSize
+          font.bold: true
         }
       }
     }
