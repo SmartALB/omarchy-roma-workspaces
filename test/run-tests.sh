@@ -122,6 +122,8 @@ assert_per_monitor() {
       && "$BIN_GREP" -q 'monitor-workspaces' "$QML" \
       && "$BIN_GREP" -q 'focusExpression' "$QML" \
       && "$BIN_GREP" -q 'font.bold: parent.occupied' "$QML" \
+      && "$BIN_GREP" -q 'id: occupancyMark' "$QML" \
+      && "$BIN_GREP" -q 'holdsWindow' "$QML" \
       && ! "$BIN_GREP" -q 'focusedWorkspace' "$QML" \
       && "$BIN_GREP" -q 'o.workspaces.focus' "$LOGIC"; then
     ok "each bar bolds workspaces that hold a window"
@@ -156,6 +158,17 @@ if (logic.monitorBlock(blocks, external, 11, 10) !== 1) fail("external block")
 if (logic.monitorBlock({}, external, 11, 10) !== 1) fail("fallback uses the workspace the monitor is showing")
 if (logic.monitorBlock({}, laptop, 1, 10) !== 0) fail("single monitor fallback")
 if (logic.monitorBlock({}, "", -1, 10) !== 0) fail("unknown monitor starts at the first block")
+
+const screens = [
+  { name: "eDP-2", x: 0, y: 150 },
+  { name: "HDMI-A-1", x: 1922, y: 0 }
+]
+if (logic.matchMonitor(screens, "HDMI-A-1", 1922, 0) !== "HDMI-A-1") fail("external screen matches its connector")
+if (logic.matchMonitor(screens, "eDP-2", 0, 150) !== "eDP-2") fail("laptop screen matches its connector")
+if (logic.matchMonitor(screens, "", 1922, 0) !== "HDMI-A-1") fail("position matches the external monitor")
+if (logic.matchMonitor(screens, "unknown", 0, 150) !== "eDP-2") fail("position matches the laptop when the name does not")
+if (logic.matchMonitor(screens, "unknown", 9, 9) !== "") fail("an unmatched screen must not take the first monitor")
+if (logic.matchMonitor([], "eDP-2", 0, 0) !== "") fail("no monitors means no match")
 
 const single = logic.listedWorkspaces({
   workspaceCount: 10, maxCount: 10, slots: 10,
@@ -230,6 +243,13 @@ if (!logic.hasWindow(counts, 1) || !logic.hasWindow(counts, 11) || !logic.hasWin
 if (logic.hasWindow(counts, 2) || logic.hasWindow(counts, 14) || logic.hasWindow(counts, -98))
   fail(`empty workspace looked occupied ${JSON.stringify(counts)}`)
 if (counts["13"] !== 2) fail(`duplicate windows collapsed ${JSON.stringify(counts)}`)
+const marked = "1,11,13,15"
+if (!logic.holdsWindow(marked, 1) || !logic.holdsWindow(marked, 11) || !logic.holdsWindow(marked, 13)
+    || !logic.holdsWindow(marked, 15))
+  fail("marked ids were not occupied")
+if (logic.holdsWindow(marked, 2) || logic.holdsWindow(marked, 12) || logic.holdsWindow("1", 11)
+    || logic.holdsWindow("", 1) || logic.holdsWindow(marked, -98))
+  fail("empty id looked occupied")
 NODE
   then
     ok "one monitor and several monitors list and focus their own workspaces"

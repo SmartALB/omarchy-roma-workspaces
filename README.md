@@ -7,15 +7,15 @@ I  II  III  IV  V
 ```
 
 Each bar belongs to the monitor it is drawn on. A workspace that holds a
-window is bold, an empty one is dimmed, and the one that monitor is showing
-takes the theme's accent. Hovering a numeral lists the windows on that
-workspace. Left click focuses it on that monitor. Right click opens a menu
-for how many there should be.
+window is drawn heavier, with a line under the numeral. An empty one is
+dimmed, and the one that monitor is showing takes the theme's accent.
+Hovering a numeral lists the windows on that workspace. Left click focuses
+it on that monitor. Right click opens a menu for how many there should be.
 
 Omarchy gives every monitor workspaces of its own. Hyprland still numbers
 them in one sequence, ten per monitor, so the first screen owns 1–10 and
 the next owns 11–20. This bar does not show that sequence. Each screen shows
-its own, from `I` upward. Bold marks a workspace with a window on it. The
+its own, from `I` upward. A line under the numeral marks a workspace with a window on it. The
 accent marks the workspace *that screen* is showing, including when the
 keyboard is on the other one. With one monitor that is simply `I` upward.
 A workspace left behind by a monitor that was
@@ -94,7 +94,7 @@ turns into a single column when the bar is vertical, each bar shows the
 monitor it is drawn on, and focus goes through the same `o.workspaces.focus`
 dispatch, aimed at that monitor. The buttons are the bar's own, so they
 follow whatever theme is active. The family, the size, and the colours are
-the theme's. A workspace with a window on it is bold, and the one that
+the theme's. A workspace with a window on it is heavier and underlined, and the one that
 monitor is showing takes the accent.
 
 Numerals are computed in classical subtractive form (`IV`, not `IIII`)

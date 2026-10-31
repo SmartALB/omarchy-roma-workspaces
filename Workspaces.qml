@@ -70,9 +70,28 @@ Panel {
   // that screen is showing. The globally focused workspace is the same on
   // every bar, so it is the wrong one as soon as a second monitor is in use.
   readonly property var monitor: {
+    // monitorFor() is a function, so reading it once does not subscribe to
+    // Hyprland's monitor list. A bar that asked before that list existed
+    // kept a null monitor and every screen then drew the first block.
+    // Touch the list and the focused monitor so this runs again when either
+    // changes, then match the screen by connector name or by position.
+    var monitors = Hyprland.monitors.values
+    var focused = Hyprland.focusedMonitor
     var window = root.QsWindow.window
     var screen = window ? window.screen : null
-    return screen ? Hyprland.monitorFor(screen) : Hyprland.focusedMonitor
+    if (!screen) return focused
+    var direct = Hyprland.monitorFor(screen)
+    if (direct) return direct
+    var records = []
+    var i
+    for (i = 0; i < monitors.length; i++) {
+      records.push({ name: monitors[i].name, x: monitors[i].x, y: monitors[i].y })
+    }
+    var matched = Logic.matchMonitor(records, screen.name, screen.x, screen.y)
+    for (i = 0; i < monitors.length; i++) {
+      if (matched && monitors[i].name === matched) return monitors[i]
+    }
+    return focused
   }
   readonly property string monitorName: root.monitor ? root.monitor.name : ""
   readonly property int activeWorkspaceId: {
@@ -98,9 +117,14 @@ Panel {
 
   readonly property int block: Logic.monitorBlock(root.blocks, root.monitorName, root.activeWorkspaceId, Logic.slotsPerMonitor())
 
-  // Workspace id -> how many windows it holds. Read straight off the live
-  // models so opening or closing a window updates every bar.
-  readonly property var windowCounts: {
+  // Comma-separated ids of workspaces that hold a window. This is assigned
+  // rather than bound. A var map returned from the shared script does not
+  // notify the buttons, so a workspace with a window stayed as faint as an
+  // empty one. occupiedRevision is an int, which does notify.
+  property string occupiedIds: ""
+  property int occupiedRevision: 0
+
+  function recount() {
     var toplevels = Hyprland.toplevels.values
     var workspaces = Hyprland.workspaces.values
     var topRecords = []
@@ -117,7 +141,22 @@ Panel {
         ? Number(workspace.lastIpcObject.windows) : 0
       workspaceRecords.push({ id: workspace.id, toplevelCount: listed, reportedWindows: reported })
     }
-    return Logic.windowCounts(workspaceRecords, topRecords)
+    var counts = Logic.windowCounts(workspaceRecords, topRecords)
+    var ids = []
+    for (var key in counts) {
+      if (Number(counts[key]) > 0) ids.push(Number(key))
+    }
+    ids.sort(function(a, b) { return a - b })
+    var parts = []
+    for (i = 0; i < ids.length; i++) parts.push(String(Math.round(ids[i])))
+    root.occupiedIds = parts.join(",")
+    root.occupiedRevision = root.occupiedRevision + 1
+  }
+
+  function scheduleRecount() {
+    root.recount()
+    recountSoon.restart()
+    recountLater.restart()
   }
 
   function workspaceRecords(values) {
@@ -198,17 +237,58 @@ Panel {
       var name = event ? String(event.name) : ""
       var switched = name === "workspacev2" && root.monitor !== null && root.monitor.focused
       var windowsChanged = name === "openwindow" || name === "closewindow" || name === "movewindow" || name === "movewindowv2"
-      if (switched || windowsChanged || name === "moveworkspacev2" || name === "changeworkspaceid") {
+      var monitorsChanged = name === "focusedmon" || name === "focusedmonv2"
+      if (switched || windowsChanged || monitorsChanged || name === "moveworkspacev2" || name === "changeworkspaceid") {
         Hyprland.refreshMonitors()
         Hyprland.refreshWorkspaces()
         Hyprland.refreshToplevels()
+        root.scheduleRecount()
       }
     }
   }
 
+  Connections {
+    target: Hyprland.toplevels
+    function onValuesChanged() { root.scheduleRecount() }
+  }
+
+  Connections {
+    target: Hyprland.workspaces
+    function onValuesChanged() { root.scheduleRecount() }
+  }
+
+  Timer {
+    id: recountSoon
+    interval: 100
+    repeat: false
+    onTriggered: root.recount()
+  }
+
+  Timer {
+    id: recountLater
+    interval: 400
+    repeat: false
+    onTriggered: root.recount()
+  }
+
+  // The window list arrives after the first frame. Sample until it has, then stop.
+  Timer {
+    interval: 250
+    repeat: true
+    running: true
+    property int left: 10
+    onTriggered: {
+      root.recount()
+      left -= 1
+      if (left <= 0) running = false
+    }
+  }
+
   Component.onCompleted: {
+    Hyprland.refreshMonitors()
     Hyprland.refreshWorkspaces()
     Hyprland.refreshToplevels()
+    root.recount()
   }
 
   readonly property real trailingGap: root.vertical ? 0 : Style.spaceReal(1.5)
@@ -238,7 +318,7 @@ Panel {
         readonly property bool guest: Logic.blockOf(modelData, slots) !== root.block
         readonly property bool firstGuest: guest && index > 0 && Logic.blockOf(root.workspaceIds[index - 1], slots) === root.block
         readonly property var workspace: root.workspaceById(modelData)
-        readonly property bool occupied: Logic.hasWindow(root.windowCounts, modelData)
+        readonly property bool occupied: root.occupiedRevision >= 0 && Logic.holdsWindow(root.occupiedIds, modelData)
         readonly property bool shown: root.activeWorkspaceId === modelData
 
         // A gap sets a visiting workspace apart from this monitor's own.
@@ -263,29 +343,63 @@ Panel {
           else root.focusWorkspace(modelData)
         }
 
-        // The button's own label cannot be made bold. This one is measured
-        // bold so the slot is wide enough either way, and the weight follows
-        // `shown`. Centering matches WidgetButton: the line box keeps room
-        // for descenders, so the figure height is what gets centered.
+        // The button's own label cannot be made bold, and at this size the
+        // bold face is about one pixel heavier than the regular one, which
+        // does not read as bold. A second copy, one pixel over, thickens the
+        // figure, and the line under it marks a workspace that holds a window.
+        // Centering matches WidgetButton: the line box keeps room for
+        // descenders, so the figure height is what gets centered.
+        readonly property real figureShift: root.vertical ? 0
+          : (boldMetrics.descent - boldMetrics.ascent + boldMetrics.tightBoundingRect("0").height) / 2
         Text {
+          id: figure
           textFormat: Text.PlainText
           anchors.centerIn: parent
-          anchors.verticalCenterOffset: root.vertical ? 0
-            : (boldMetrics.descent - boldMetrics.ascent + boldMetrics.tightBoundingRect("0").height) / 2
+          anchors.verticalCenterOffset: figureShift
+          anchors.horizontalCenterOffset: 0
           text: parent.text
           color: parent.active && parent.useActiveColor ? parent.activeColor : parent.foreground
           font.family: parent.fontFamily
           font.pixelSize: parent.fontSize
           font.bold: parent.occupied
+          font.weight: parent.occupied ? Font.Bold : Font.Normal
           renderType: Text.NativeRendering
           horizontalAlignment: Text.AlignHCenter
           verticalAlignment: Text.AlignVCenter
         }
+        Text {
+          visible: parent.occupied
+          textFormat: Text.PlainText
+          anchors.centerIn: parent
+          anchors.verticalCenterOffset: figureShift
+          anchors.horizontalCenterOffset: 1
+          text: figure.text
+          color: figure.color
+          font.family: figure.font.family
+          font.pixelSize: figure.font.pixelSize
+          font.bold: true
+          font.weight: Font.Bold
+          renderType: Text.NativeRendering
+          horizontalAlignment: Text.AlignHCenter
+          verticalAlignment: Text.AlignVCenter
+        }
+        // At 12px the bold face does not look bold. This line is the mark.
+        Rectangle {
+          id: occupancyMark
+          visible: parent.occupied
+          color: figure.color
+          radius: 1
+          height: 2
+          width: Math.max(6, figure.contentWidth)
+          anchors.horizontalCenter: parent.horizontalCenter
+          anchors.bottom: parent.bottom
+          anchors.bottomMargin: 2
+        }
 
         FontMetrics {
           id: boldMetrics
-          font.family: parent.fontFamily
-          font.pixelSize: parent.fontSize
+          font.family: parent.fontFamily || Style.font.family
+          font.pixelSize: parent.fontSize > 0 ? parent.fontSize : Style.font.body
           font.bold: true
         }
       }

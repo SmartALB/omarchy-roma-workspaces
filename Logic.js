@@ -39,6 +39,26 @@ function slotsPerMonitor() {
   return 10
 }
 
+// The monitor this screen is drawing on. The connector name wins. Position
+// is the fallback when the screen's name is not a connector name. Empty
+// means nothing matched, and the caller decides what to do — guessing the
+// first monitor would put the wrong block on every bar.
+function matchMonitor(monitors, screenName, screenX, screenY) {
+  var list = monitors || []
+  var i
+  var name = String(screenName || "")
+  for (i = 0; i < list.length; i++) {
+    if (name && String(list[i].name || "") === name) return String(list[i].name)
+  }
+  var x = Number(screenX)
+  var y = Number(screenY)
+  if (!isFinite(x) || !isFinite(y)) return ""
+  for (i = 0; i < list.length; i++) {
+    if (Number(list[i].x) === x && Number(list[i].y) === y) return String(list[i].name || "")
+  }
+  return ""
+}
+
 function blockOf(id, slots) {
   return Math.floor((Number(id) - 1) / (slots || slotsPerMonitor()))
 }
@@ -153,6 +173,14 @@ function windowCounts(workspaces, toplevels) {
 
 function hasWindow(counts, id) {
   return Number(counts && counts[String(id)] || 0) > 0
+}
+
+// occupiedIds is "1,11,13". The commas stop 1 from matching 11.
+function holdsWindow(occupiedIds, id) {
+  var numeric = Math.round(Number(id))
+  if (!isFinite(numeric) || numeric <= 0) return false
+  var list = "," + String(occupiedIds || "") + ","
+  return list.indexOf("," + numeric + ",") !== -1
 }
 
 function focusExpression(id, block, monitorName, slots) {
