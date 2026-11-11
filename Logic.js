@@ -32,3 +32,163 @@ function roman(value) {
   }
   return out
 }
+
+// Omarchy gives every monitor this many workspaces. Hyprland numbers them in
+// one sequence, so monitor 0 owns 1-10, monitor 1 owns 11-20, and so on.
+function slotsPerMonitor() {
+  return 10
+}
+
+// The monitor this screen is drawing on. The connector name wins. Position
+// is the fallback when the screen's name is not a connector name. Empty
+// means nothing matched, and the caller decides what to do — guessing the
+// first monitor would put the wrong block on every bar.
+function matchMonitor(monitors, screenName, screenX, screenY) {
+  var list = monitors || []
+  var i
+  var name = String(screenName || "")
+  for (i = 0; i < list.length; i++) {
+    if (name && String(list[i].name || "") === name) return String(list[i].name)
+  }
+  var x = Number(screenX)
+  var y = Number(screenY)
+  if (!isFinite(x) || !isFinite(y)) return ""
+  for (i = 0; i < list.length; i++) {
+    if (Number(list[i].x) === x && Number(list[i].y) === y) return String(list[i].name || "")
+  }
+  return ""
+}
+
+function blockOf(id, slots) {
+  return Math.floor((Number(id) - 1) / (slots || slotsPerMonitor()))
+}
+
+function slotOf(id, slots) {
+  slots = slots || slotsPerMonitor()
+  return (Number(id) - 1) % slots + 1
+}
+
+// The state file is one monitor per line: block, connector, identity.
+// A monitor that is unplugged keeps its block but has an empty connector,
+// and the bar only needs the monitors that are plugged in now.
+function parseMonitorBlocks(text) {
+  var blocks = {}
+  var lines = String(text || "").split("\n")
+  for (var i = 0; i < lines.length; i++) {
+    if (lines[i] === "") continue
+    var fields = lines[i].split("\t")
+    if (fields.length < 2 || fields[1] === "") continue
+    var block = parseInt(fields[0], 10)
+    if (isFinite(block)) blocks[fields[1]] = block
+  }
+  return blocks
+}
+
+// The file is the authority, because the workspace a monitor is showing may
+// be a guest from another block. Until the file has been read, the workspace
+// it is showing is treated as one of its own.
+function monitorBlock(blocks, monitorName, activeId, slots) {
+  slots = slots || slotsPerMonitor()
+  if (blocks && monitorName && blocks[monitorName] !== undefined && blocks[monitorName] !== null) {
+    var assigned = Number(blocks[monitorName])
+    if (isFinite(assigned)) return assigned
+  }
+  var active = Number(activeId)
+  if (isFinite(active) && active > 0) return blockOf(active, slots)
+  return 0
+}
+
+// The ids to draw for one monitor: its own slots, from I upward, then any
+// workspace that is only visiting because its monitor is unplugged.
+function listedWorkspaces(spec) {
+  var slots = spec.slots || slotsPerMonitor()
+  var count = boundedInteger(spec.workspaceCount, 5, 1, spec.maxCount || slots)
+  var own = Math.min(count, slots)
+  var block = Number(spec.block)
+  if (!isFinite(block) || block < 0) block = 0
+
+  var base = block * slots
+  var ids = []
+  var i
+  for (i = 1; i <= own; i++) ids.push(base + i)
+
+  var guests = []
+  var workspaces = spec.workspaces || []
+  if (spec.reveal) {
+    for (i = 0; i < workspaces.length; i++) {
+      var id = Math.round(Number(workspaces[i].id))
+      if (!isFinite(id) || id <= 0) continue
+      if (blockOf(id, slots) === block) {
+        if (ids.indexOf(id) === -1) ids.push(id)
+      } else if (workspaces[i].monitorName && spec.monitorName && workspaces[i].monitorName === spec.monitorName) {
+        if (guests.indexOf(id) === -1) guests.push(id)
+      }
+    }
+  }
+
+  ids.sort(function(left, right) { return left - right })
+  guests.sort(function(left, right) { return left - right })
+
+  var entries = []
+  for (i = 0; i < ids.length; i++) entries.push({ id: ids[i], slot: slotOf(ids[i], slots), guest: false })
+  for (i = 0; i < guests.length; i++) entries.push({ id: guests[i], slot: slotOf(guests[i], slots), guest: true })
+  return entries
+}
+
+// A slot of this monitor's own block is focused by slot, on that monitor, so
+// a click cannot pull another screen's workspace across. A visitor has no
+// slot here, and is focused by its real id.
+// How many windows each workspace id holds. A toplevel that names its
+// workspace is counted directly. The workspace's own list and the window
+// count Hyprland last reported fill in anything that list missed. Keys are
+// strings because a QML object map does not keep numeric keys.
+function windowCounts(workspaces, toplevels) {
+  var counts = {}
+
+  function note(id, amount) {
+    var numeric = Number(id)
+    var windows = Number(amount)
+    if (!isFinite(numeric) || numeric <= 0 || !isFinite(windows) || windows <= 0) return
+    var key = String(numeric)
+    if (windows > (counts[key] || 0)) counts[key] = windows
+  }
+
+  var seen = {}
+  var i
+  for (i = 0; i < (toplevels || []).length; i++) {
+    var workspaceId = Number(toplevels[i].workspaceId)
+    if (workspaceId > 0) seen[workspaceId] = (seen[workspaceId] || 0) + 1
+  }
+  for (var key in seen) note(key, seen[key])
+
+  for (i = 0; i < (workspaces || []).length; i++) {
+    var workspace = workspaces[i]
+    var listed = Number(workspace.toplevelCount) || 0
+    var reported = Number(workspace.reportedWindows) || 0
+    note(workspace.id, Math.max(listed, reported))
+  }
+
+  return counts
+}
+
+function hasWindow(counts, id) {
+  return Number(counts && counts[String(id)] || 0) > 0
+}
+
+// occupiedIds is "1,11,13". The commas stop 1 from matching 11.
+function holdsWindow(occupiedIds, id) {
+  var numeric = Math.round(Number(id))
+  if (!isFinite(numeric) || numeric <= 0) return false
+  var list = "," + String(occupiedIds || "") + ","
+  return list.indexOf("," + numeric + ",") !== -1
+}
+
+function focusExpression(id, block, monitorName, slots) {
+  slots = slots || slotsPerMonitor()
+  id = Math.round(Number(id))
+  var name = String(monitorName || "")
+  if (name && blockOf(id, slots) === Number(block)) {
+    return "o.workspaces.focus(" + slotOf(id, slots) + ", \"" + name.replace(/\\/g, "\\\\").replace(/"/g, "\\\"") + "\")"
+  }
+  return "hl.dsp.focus({ workspace = \"" + id + "\" })"
+}

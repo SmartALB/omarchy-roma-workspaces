@@ -6,9 +6,20 @@ Workspace indicators for the Omarchy bar, in Roman numerals:
 I  II  III  IV  V
 ```
 
-The one you are on takes the theme's accent, empty ones are dimmed, and
-hovering a numeral lists the windows on that workspace. Left click focuses
-it. Right click opens a menu for how many there should be.
+Each bar belongs to the monitor it is drawn on. A workspace that holds a
+window is drawn heavier, with a line under the numeral. An empty one is
+dimmed, and the one that monitor is showing takes the theme's accent.
+Hovering a numeral lists the windows on that workspace. Left click focuses
+it on that monitor. Right click opens a menu for how many there should be.
+
+Omarchy gives every monitor workspaces of its own. Hyprland still numbers
+them in one sequence, ten per monitor, so the first screen owns 1–10 and
+the next owns 11–20. This bar does not show that sequence. Each screen shows
+its own, from `I` upward. A line under the numeral marks a workspace with a window on it. The
+accent marks the workspace *that screen* is showing, including when the
+keyboard is on the other one. With one monitor that is simply `I` upward.
+A workspace left behind by a monitor that was
+unplugged is listed after the screen's own, for as long as it stays.
 
 Companion to [Roma](https://github.com/SmartALB/omarchy-roma), which does
 the same to the clock. Neither needs the other.
@@ -23,7 +34,7 @@ the same to the clock. Neither needs the other.
 
 | Setting | Does | Default |
 |---|---|---|
-| Workspaces shown | How many are always in the bar, from `I` upwards (1–20) | 5 |
+| Workspaces shown | How many of this monitor's workspaces are always in the bar, from `I` upwards (1–10) | 5 |
 | Reveal the ones beyond | Keeps a workspace past that count visible while it exists | on |
 | Dim the empty ones | Fades workspaces holding no windows | on |
 
@@ -79,14 +90,16 @@ is kept anywhere, so nothing else survives.
 
 A clone of the built-in `omarchy.workspaces` widget with the labels changed.
 Everything that is not about numerals is the built-in behaviour: the grid
-turns into a single column when the bar is vertical, focus goes through the
-same `hl.dsp.focus` dispatch, and the buttons are the bar's own, so they
-follow whatever theme is active. **No colour and no font is hardcoded** —
-what you see is your theme, not this author's.
+turns into a single column when the bar is vertical, each bar shows the
+monitor it is drawn on, and focus goes through the same `o.workspaces.focus`
+dispatch, aimed at that monitor. The buttons are the bar's own, so they
+follow whatever theme is active. The family, the size, and the colours are
+the theme's. A workspace with a window on it is heavier and underlined, and the one that
+monitor is showing takes the accent.
 
 Numerals are computed in classical subtractive form (`IV`, not `IIII`)
-rather than looked up in a table. The widget can show numeric workspaces from
-`I` through `XX`; the default remains five.
+rather than looked up in a table. Each monitor is numbered from `I` through
+`X`; the default remains five.
 
 Two things the built-in does not do: the numerals, and a tooltip listing the
 window classes on each workspace, deduplicated and cut off after three.
@@ -98,9 +111,10 @@ test/run-tests.sh
 ```
 
 The suite checks the version and workspace-range contracts, then executes the
-same Roman numeral and setting-coercion functions the widget imports. It uses
-Node.js for those behavioural checks; Node.js is needed only for development,
-not by the installed widget. It also verifies that the number control is
+same Roman numeral, setting-coercion, and per-monitor listing functions the
+widget imports. It uses Node.js for those behavioural checks; Node.js is
+needed only for development, not by the installed widget. It also verifies
+that the number control is
 non-editable and instantiated only while the settings panel is open, so it
 has no paste path and a closed panel cannot react to clipboard changes in the
 shared shell process.
